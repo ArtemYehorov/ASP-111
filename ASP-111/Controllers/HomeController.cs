@@ -35,6 +35,7 @@ namespace ASP_111.Controllers
         {
             return View();
         }
+
         public IActionResult Services()
         {
             ViewData["date"] = _dateService.GetDate();
