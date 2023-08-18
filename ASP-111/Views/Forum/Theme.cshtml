@@ -1,0 +1,61 @@
+﻿@model ASPProject.Models.Forum.Theme.ThemePageModel
+@{
+    ViewData["Title"] = "Theme";
+}
+
+<div class="text-center">
+    <h1 class="display-4">Forum</h1>
+</div>
+
+<div class="text-center">
+    <h2 class="display-4">@Model.Theme.Title</h2>
+    <h6>By @Model.Theme.Author.Name</h6>
+</div>
+
+@foreach(var comment in Model.Comments)
+{
+    @Html.DisplayFor(n => comment,"CommentTemplate")
+}
+
+
+@if (Context.User.Identity?.IsAuthenticated == true)
+{
+    if (Model.ErrorMessages != null)
+    {
+        <b>@Model.ErrorMessages["Comments"]</b>
+    }
+
+    <form asp-action="AddComment" asp-controller="Forum"
+          method="post" enctype="multipart/form-data">
+
+
+        <label for="comment-content" class="form-label">Відповідь</label>
+        <div class="input-group mb-3">
+            <span class="input-group-text"><i class="bi bi-book"></i></span>
+            <textarea class="form-control" aria-label="With textarea"
+                      id="comment-content" name="Content"
+                      placeholder="Введіть відповідь"></textarea>
+        </div>
+
+        <input type="hidden" name="ThemeId" value="@(Model.Theme.Id)" />
+        <input type="hidden" name="ReplyId" value="" />
+
+        <button type="submit" class="btn btn-primary">Додати</button>
+    </form>
+    <script>
+        document.addEventListener('DOMContentLoaded', () =>{
+            for(let replyButton of document.querySelectorAll('[data-reply]'))
+            {
+                replyButton.addEventListener('click',replyClick);
+            }
+        });
+        function replyClick(e){
+            const replyId = e.target.closest('button').getAttribute('data-reply');
+            console.log(replyId);
+            const hiddenInput = document.querySelector('input[name="ReplyId"]');
+            hiddenInput.value = replyId;
+        }
+    </script>
+
+}
+

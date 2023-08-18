@@ -1,4 +1,4 @@
-﻿namespace ASP_111.Services
+﻿namespace ASPProject.Services
 {
     public class Validation
     {
@@ -33,5 +33,5 @@
         {
             return Char.IsLetterOrDigit(c) || c == '_';
         }
-    }
+    } 
 }

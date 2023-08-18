@@ -1,16 +1,111 @@
-﻿using ASP_111.Models.User;
+﻿using ASPProject.Data;
+using ASPProject.Models.User;
+using ASPProject.Services.Email;
+using ASPProject.Services.Hash;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 using System.Text.RegularExpressions;
 
-namespace ASP_111.Controllers
+namespace ASPProject.Controllers
 {
     public class UserController : Controller
     {
         private readonly DataContext _dataContext;
+        private readonly IHashService _hashService;
+        private readonly ILogger<UserController> _logger;
+        private readonly IEmailService _emailService;
 
-        public UserController(DataContext dataContext)
+
+        public UserController(DataContext dataContext, IHashService hashService, ILogger<UserController> logger, IEmailService emailService)
         {
             _dataContext = dataContext;
+            _hashService = hashService;
+            _logger = logger;
+            _emailService = emailService;
+        }
+
+        public JsonResult UpdateEmail(String email)
+        {
+          
+            // _logger.LogInformation("UpdateEmail works {email}", email);
+            // проверяем что пользователь аутентифицирован
+            if (HttpContext.User.Identity?.IsAuthenticated != true)
+            {
+                return Json(new { success = false, message = "UnAuthenticated" });
+            }
+            Guid userId;
+            try
+            {   // извлекаем из Claims ID и ...
+                userId = Guid.Parse(
+                    HttpContext.User.Claims.First(
+                        c => c.Type == ClaimTypes.Sid
+                    ).Value);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError("UpdateEmail exception {ex}", ex.Message);
+                return Json(new { success = false, message = "UnAuthorized" });
+            }
+            // ... находим по нему пользователя
+            var user = _dataContext.Users.Find(userId);
+
+            if (user.Email == email)
+            {
+                return Json(new { success = false, message = "Email is not changed" });
+            }
+
+            if (user == null)
+            {
+                return Json(new { success = false, message = "Access denied" });
+            }
+            // генерируем код для подтверждения почты
+            String confirmCode = Guid.NewGuid().ToString()[..6].ToUpperInvariant();
+            try
+            {
+                _emailService.Send(
+                    email,
+                    $"To confirm Email enter code <b>{confirmCode}</b>",
+                    "Email changed");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError("UpdateEmail exception {ex}", ex.Message);
+                return Json(new { success = false, message = "Email invalid" });
+            }
+
+            user.Email = email;
+            user.ConfirmCode = confirmCode;  // сохраняем в БД код подтверждения почты
+
+            _dataContext.SaveChanges();
+            return Json(new { success = true });
+        }
+
+        public ViewResult Profile()
+        {
+            // находим ид пользователя из Claims
+            String? userId = HttpContext.User.Claims
+                .FirstOrDefault(c => c.Type == ClaimTypes.Sid)?.Value;
+
+            ProfileViewModel model = null!;
+            if (userId is not null)
+            {
+                // находим данные о пользователе по ид
+                var user = _dataContext.Users.Find(Guid.Parse(userId));
+                if (user != null)
+                {
+                    model = new()
+                    {
+                        Name = user.Name,
+                        Email = user.Email,
+                        Avatar = user.Avatar ?? "no-photo.png",
+                        CreatedDt = user.CreatedDt,
+                        Login = user.Login,
+                        IsEmailConfirmed = (user.ConfirmCode == null),
+                    };
+                }
+            }
+            return View(model);
         }
 
         public IActionResult Index()
@@ -18,7 +113,23 @@ namespace ASP_111.Controllers
             return View();
         }
 
-        public ViewResult Login(SignUpFormModel? formModel)
+        [HttpPost]
+        public JsonResult Auth([FromBody] AuthAjaxModel model)
+        {
+            var user = _dataContext.Users.FirstOrDefault(
+                u => u.Login == model.Login &&
+                u.PasswordHash == _hashService.GetHash(model.Password)
+                );
+
+            if (user != null)
+            {
+                HttpContext.Session.SetString("userId", user.Id.ToString());
+            }
+            return Json(new { Success = (user != null) });
+        }
+
+        
+        public IActionResult Login(SignUpFormModel? formModel)
         {
             SignUpViewModel viewModel;
             if (Request.Method == "POST" && formModel != null)
@@ -26,12 +137,33 @@ namespace ASP_111.Controllers
                 // передача формы
                 viewModel = ValidateSignUpForm(formModel);
                 viewModel.FormModel = formModel;
+                HttpContext.Session.SetString("FromData", System.Text.Json.JsonSerializer.Serialize(viewModel));
+                return RedirectToAction(nameof(Login));
             }
             else
             {
-                // первый заход - начало заполнения формы
-                viewModel = new();
-                viewModel.FormModel = null;  // нечего проверять
+                if (HttpContext.Session.Keys.Contains("FromData"))
+                {
+                    String? data = HttpContext.Session.GetString("FromData");
+                    if (data != null)
+                    {
+                        viewModel = System.Text.Json.JsonSerializer.Deserialize<SignUpViewModel>(data)!;
+                        HttpContext.Session.Remove("FromData");
+                    }
+                    else
+                    {
+                        viewModel = new();
+                        viewModel.FormModel = null;  // нечего проверять
+                    }
+
+                }
+                else
+                {
+                    // первый заход - начало заполнения формы
+                    viewModel = new();
+                    viewModel.FormModel = null;  // нечего проверять
+                }
+
             }
             return View(viewModel);  // передаем модель в представление
         }
@@ -77,42 +209,45 @@ namespace ASP_111.Controllers
 
             if (String.IsNullOrEmpty(formModel.RepeatPassword))
             {
-                viewModel.PasswordMessage = "Вы должны подтвердить свой пароль";
+                viewModel.RepeatMessage = "Вы должны подтвердить свой пароль";
             }
             else if (formModel.Password != formModel.RepeatPassword)
             {
-                viewModel.PasswordMessage = "Пароли не совпадают";
+                viewModel.RepeatMessage = "Пароли не совпадают";
             }
             else
             {
-                viewModel.PasswordMessage = null;  // все проверки пароля пройдены
+                viewModel.RepeatMessage = null;  // все проверки пароля пройдены
             }
 
+            if (formModel.RealName != null)
+            {
+                if (Regex.IsMatch(formModel.RealName, @"\d|[\W_]"))
+                {
+                    viewModel.RealNameMessage = "Имя содержит цифры или символы";
+                }
+                else
+                {
+                    viewModel.RealNameMessage = null;  // все проверки пароля пройдены
+                }
+            }
 
-            if (Regex.IsMatch(formModel.RealName, @"\d|[\W_]"))
-            {
-                viewModel.RealNameMessage = "Имя содержит цифры или символы";
-            }
-            else
-            {
-                viewModel.PasswordMessage = null;  // все проверки пароля пройдены
-            }
 
 
             if (String.IsNullOrEmpty(formModel.Email))
             {
-                viewModel.PasswordMessage = "E-mail не может быть пустым";
+                viewModel.EmailMessage = "E-mail не может быть пустым";
             }
             else if (_dataContext.Users.Any(u => u.Email == formModel.Email))
             {
-                viewModel.PasswordMessage = "На данную почту уже есть регистрация";
+                viewModel.EmailMessage = "На данную почту уже есть регистрация";
             }
             else
             {
-                viewModel.PasswordMessage = null;  // все проверки пароля пройдены
+                viewModel.EmailMessage = null;  // все проверки пароля пройдены
             }
 
-
+            String nameAvatar = null!;
             // сохранение файла
             if (formModel.Avatar != null)  // файл передан
             {
@@ -133,12 +268,41 @@ namespace ASP_111.Controllers
                 // проверить расширение на перечень допустимых
 
                 // формируем имя для файла
-                String name = Guid.NewGuid().ToString() + ext;
+                nameAvatar = Guid.NewGuid().ToString() + ext;
 
                 formModel.Avatar.CopyTo(
-                    new FileStream("wwwroot/avatars/" + name, FileMode.Create));
+                    new FileStream("wwwroot/avatars/" + nameAvatar, FileMode.Create));
+            }
+
+
+
+            if (viewModel.LoginMessage == null &&
+                viewModel.PasswordMessage == null &&
+                viewModel.AvatarMessage == null)
+            {
+                _dataContext.Users.Add(new()
+                {
+                    Id = Guid.NewGuid(),
+                    Login = formModel.Login,
+                    PasswordHash = _hashService.GetHash(formModel.Password),
+                    Email = formModel.Email!,
+                    CreatedDt = DateTime.Now,
+                    Name = formModel.RealName!,
+                    Avatar = nameAvatar
+                });
+                _dataContext.SaveChanges();
             }
             return viewModel;
+        }
+
+        public RedirectToActionResult Logout()
+        {
+            /* Выход из авторизированного режима всегда должен
+          * перенаправить на страницу, которая доступна без авторизации
+          * Чаще всего - на домашнюю страницу
+          */
+            HttpContext.Session.Remove("userId");
+            return RedirectToAction("Index", "Home");
         }
     }
 }

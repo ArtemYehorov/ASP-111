@@ -1,9 +1,15 @@
-ï»¿using ASP_111;
-using ASP_111.Services;
+using ASPProject.Data;
+using ASPProject.Middleware;
+using ASPProject.Services;
+using ASPProject.Services.AuthUser;
+using ASPProject.Services.Email;
+using ASPProject.Services.Hash;
+using ASPProject.Services.Validations;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Migrations;
 using MySqlConnector;
 using Pomelo.EntityFrameworkCore.MySql.Infrastructure;
+using System.Xml.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -15,7 +21,24 @@ builder.Services.AddScoped<TimeService>();
 builder.Services.AddTransient<DateTimeService>();
 builder.Services.AddSingleton<Validation>();
 
-//ÃªÃ®Ã­Ã²Ã¥ÃªÃ±Ã² Ã¤Ã Ã­Ã­Ã»Ãµ
+
+builder.Services.AddSingleton<IHashService, Md5HashService>();
+
+builder.Services.AddDistributedMemoryCache();
+
+builder.Services.AddSession(options =>
+{
+    options.IdleTimeout = TimeSpan.FromSeconds(30);
+    options.Cookie.HttpOnly = true;
+    options.Cookie.IsEssential = true;
+});
+
+builder.Services.AddSingleton<IEmailService, GmailService>();
+
+builder.Services.AddSingleton<IValidationService, ValidationServiceV1>();
+builder.Services.AddScoped<IAuthUserService, ClaimsAuthUserService>();
+
+//êîíòåêñò äàííûõ
 String? connectionString = builder.Configuration.GetConnectionString("PlanetScale");
 MySqlConnection connection = new MySqlConnection(connectionString);
 builder.Services.AddDbContext<DataContext>
@@ -45,7 +68,13 @@ app.UseStaticFiles();
 
 app.UseRouting();
 
+app.UseMarker();
+
 app.UseAuthorization();
+
+app.UseSession();
+
+app.UseAuthSession();
 
 app.MapControllerRoute(
     name: "default",

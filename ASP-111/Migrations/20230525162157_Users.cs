@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace ASP_111.Migrations
+namespace ASPProject.Migrations
 {
     /// <inheritdoc />
     public partial class Users : Migration
@@ -14,8 +14,8 @@ namespace ASP_111.Migrations
             migrationBuilder.EnsureSchema(
                 name: "asp");
 
-           // migrationBuilder.AlterDatabase()
-             //   .Annotation("MySql:CharSet", "utf8mb4");
+            //migrationBuilder.AlterDatabase()
+                //.Annotation("MySql:CharSet", "utf8mb4");
 
             migrationBuilder.CreateTable(
                 name: "Users",

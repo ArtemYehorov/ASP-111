@@ -1,4 +1,4 @@
-﻿namespace ASP_111.Models.User
+﻿namespace ASPProject.Models.User
 {
     public class SignUpViewModel
     {

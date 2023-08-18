@@ -1,7 +1,7 @@
-﻿namespace ASP_111.Services
+﻿namespace ASPProject.Services
 {
     public class TimeService
     {
-        public TimeOnly GetTime() => TimeOnly.FromDateTime(DateTime.Now);
+        public TimeOnly Gettime() => TimeOnly.FromDateTime(DateTime.Now);
     }
 }

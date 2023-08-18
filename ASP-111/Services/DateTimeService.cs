@@ -1,5 +1,6 @@
 ﻿using System.Runtime.CompilerServices;
-namespace ASP_111.Services
+
+namespace ASPProject.Services
 {
     public class DateTimeService
     {
@@ -12,6 +13,6 @@ namespace ASP_111.Services
             _dateService = dateService;
             _timeService = timeService;
         }
-        public DateTime GetNow() => _dateService.GetDate() + _timeService.GetTime().ToTimeSpan();
+        public DateTime GetNow() => _dateService.GetDate() + _timeService.Gettime().ToTimeSpan();
     }
 }

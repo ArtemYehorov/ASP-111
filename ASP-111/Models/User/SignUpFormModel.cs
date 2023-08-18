@@ -1,7 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using System.Xml.Linq;
+using System.Text.Json.Serialization;
 
-namespace ASP_111.Models.User
+namespace ASPProject.Models.User
 {
     public class SignUpFormModel
     {
@@ -16,7 +16,8 @@ namespace ASP_111.Models.User
         [FromForm(Name = "user-email")]
         public string Email { get; set; } = null!;
 
-        [FromForm(Name = "user-email")]
+        [FromForm(Name = "user-avatar")]
+        [JsonIgnore]
         public IFormFile Avatar { get; set; } = null!;
         [FromForm(Name = "rememeber")]
         public string IsAgree { get; set; } = null!;

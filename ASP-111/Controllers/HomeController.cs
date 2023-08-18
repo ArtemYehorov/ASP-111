@@ -1,9 +1,9 @@
-﻿using ASP_111.Models;
-using ASP_111.Services;
+﻿using ASPProject.Models;
+using ASPProject.Services;
 using Microsoft.AspNetCore.Mvc;
 using System.Diagnostics;
 
-namespace ASP_111.Controllers
+namespace ASPProject.Controllers
 {
     public class HomeController : Controller
     {
@@ -13,7 +13,7 @@ namespace ASP_111.Controllers
         private readonly TimeService _timeService;
         private readonly DateTimeService _dateTimeService;
         private readonly Validation _validatorService = new();
-        public HomeController(ILogger<HomeController> logger, IDateService dateService, TimeService timeService, DateTimeService dateTimeService, Validation validation)
+        public HomeController(ILogger<HomeController> logger,IDateService dateService, TimeService timeService, DateTimeService dateTimeService, Validation validation)
         {
             _logger = logger;
             _dateService = dateService;
@@ -35,11 +35,32 @@ namespace ASP_111.Controllers
         {
             return View();
         }
-
-        public IActionResult Services()
+        public ViewResult Sessions()
         {
+            if(HttpContext.Session.Keys.Contains("StoredValue"))
+            {
+                ViewData["StoredValue"] = HttpContext.Session.GetString("StoredValue");
+            }
+            else
+            {
+                ViewData["StoredValue"] = "";
+            }
+            return View();
+        }
+        public RedirectToActionResult RemoveSession()
+        {
+            HttpContext.Session.Remove("StoredValue");
+            return RedirectToAction(nameof(Sessions));
+        }
+        public IActionResult SetSession()
+        {
+            HttpContext.Session.SetString("StoredValue","Данные сессии");
+            return RedirectToAction(nameof(Sessions));
+        }
+        public IActionResult Services()
+        { 
             ViewData["date"] = _dateService.GetDate();
-            ViewData["time"] = _timeService.GetTime();
+            ViewData["time"] = _timeService.Gettime();
             ViewData["datetime"] = _dateTimeService.GetNow();
 
             ViewData["date-hash"] = _dateService.GetHashCode();
@@ -63,6 +84,12 @@ namespace ASP_111.Controllers
             return View();
         }
 
+        public ViewResult Middleware()
+        {
+            ViewData["marker"] = HttpContext.Items.ContainsKey("marker")
+                ? HttpContext.Items["marker"] : "Нет маркера";
+            return View("Middleware");
+        }
         [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
         public IActionResult Error()
         {
